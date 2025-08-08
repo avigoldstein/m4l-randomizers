@@ -102,12 +102,10 @@ function randomizeDeviceParameters(nextDevice) {
                 try {
                     var currentValue = param.get("value");
                     var frozenKey = name + "_" + paramIds[i];
-                    post("frozenKey: " + frozenKey + "\n");
                     if (freeze) {
                         if (isObjectEmpty(frozenMap) || frozenMap[frozenKey] === undefined) {
                             frozenMap[frozenKey] = currentValue;
                         } else if (freeze && frozenMap[frozenKey] !== undefined) {
-                            post("Using frozen value for " + name + ": " + frozenMap[frozenKey] + "\n");
                             currentValue = frozenMap[frozenKey];
                         }
                     }
@@ -209,16 +207,6 @@ function randomizeAllDevices() {
     }
 }
 
-function runscript() {
-    post("Multi-device randomizer script loaded.\n");
-    post("Mode: " + (mode === MODES.SHALLOW ? "SHALLOW" : "DEEP") + "\n");
-    post("Random Deviance: " + randomDeviance + "\n");
-    post("Freeze: " + freeze + "\n");
-    post("Excluded Macros: " + excludedMacros.join(", ") + "\n");
-}
-
 function bang() {
     randomizeAllDevices();
-    // task = new Task(randomizeAllDevices, this);
-    // task.schedule(0); // schedule for next tick
 }
