@@ -1,7 +1,7 @@
 // // rando.js
 autowatch = 1;
 
-inlets = 5;
+inlets = 6;
 
 var MODES = {
     SHALLOW: 0,
@@ -11,7 +11,8 @@ var MODES = {
 var mode = MODES.SHALLOW; // Default mode
 var excludedMacros = [];
 var randomDeviance = 100;
-var randomRange = 100;
+var freeze = false;
+var frozenMap = {};
 
 // EVENT LISTENERS
 function msg_int(val) {
@@ -24,12 +25,23 @@ function msg_int(val) {
     } else if (this.inlet === 2) {
         randomDeviance = parseInt(val);
     } else if (this.inlet === 3) {
-        randomRange = parseInt(val);
+        freeze = Boolean(val);
+        if (!freeze) {
+            frozenMap = {}; // Clear frozen map if freeze is turned off
+            post("Frozen map cleared.\n");
+        }
     }
 }
 
 function anything(messagename) {
-    var text = messagename;
+    post("got message:", messagename, this.inlet, "\n");
+    var text = messagename; 
+    if (this.inlet === 0) {
+        outlet(0, "bang");
+    }
+    if (this.inlet === 5) {
+     qbang();
+    }
     if (this.inlet === 4) {
         if (text && text.length > 0) {
             excludedMacros = text.split(",").map(function(item) {
@@ -54,26 +66,24 @@ function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
 }
 
-function getNewMacroValueWithRandomness(current, randomDeviance, randomRange) {
+function isObjectEmpty(obj) {
+  if (Object.keys(obj).length === 0) {
+    return true; // Object is empty
+  } else {
+    return false; // Object is not empty
+  }
+}
+
+function getNewMacroValueWithRandomness(current) {
 
     var amt = parseFloat(randomDeviance / 100); // convert to 0.0–1.0
-    var rng = parseFloat((randomRange / 100) * 127);  // convert to 127 scale
     var curr = parseFloat(current);
 
-    post(rng, curr, curr + rng, curr - rng);
-
-    // Random target within ±rng of current value
-    var minRand = clamp(curr - rng, 0.0, 127.0);
-    var maxRand = clamp(curr + rng, 0.0, 127.0);
-
-    var randomVal = Math.random();
-
-    var randomTarget = randomVal * (maxRand - minRand) + minRand;
+    var randomVal = Math.random() * 127.0; // Random value between 0 and 127
 
     // Interpolate based on amount
-    var newVal = curr + (randomTarget - curr) * amt;
+    var newVal = curr + (randomVal - curr) * amt;
     newVal = clamp(newVal, 0.0, 127.0);
-    post("New Value: " + newVal + "\n");
     newVal = Math.round(newVal);
 
     return newVal;
@@ -81,8 +91,6 @@ function getNewMacroValueWithRandomness(current, randomDeviance, randomRange) {
 
 function randomizeDeviceParameters(nextDevice) {
     try {
-        // nextDevice.call("randomize_macros"); // Trigger randomization
-        // post("Randomized macros for track " + trackNumber + ", device " + deviceIndex + "\n");
         var paramIds = nextDevice.get("parameters");
 
         for (var i = 1; i < paramIds.length; i += 2) {
@@ -93,13 +101,21 @@ function randomizeDeviceParameters(nextDevice) {
             if (param != null && param.id != 0 && str_includes(original_name, "Macro") && !array_includes(excludedMacros, name)) {
                 try {
                     var currentValue = param.get("value");
-                    var newValue = getNewMacroValueWithRandomness(currentValue, randomDeviance, randomRange);
+                    var frozenKey = name + "_" + paramIds[i];
+                    post("frozenKey: " + frozenKey + "\n");
+                    if (freeze) {
+                        if (isObjectEmpty(frozenMap) || frozenMap[frozenKey] === undefined) {
+                            frozenMap[frozenKey] = currentValue;
+                        } else if (freeze && frozenMap[frozenKey] !== undefined) {
+                            post("Using frozen value for " + name + ": " + frozenMap[frozenKey] + "\n");
+                            currentValue = frozenMap[frozenKey];
+                        }
+                    }
+                    var newValue = getNewMacroValueWithRandomness(currentValue);
                     param.set("value", newValue);
                 } catch (e) {
                     post("Error on param", i, ":", e.message, "\n");
                 }
-            } else {
-                post("Invalid parameter at index " + i + "\n");
             }
         }
     } catch (e) {
@@ -143,7 +159,6 @@ function getNextDevice(trackNumber, deviceIndex) {
     if (isRealDevice(device)) {
         return device;
     } else {
-      post("No device at: " + path + "\n");
       return null;
     }
 }
@@ -171,15 +186,17 @@ function walkDevices(path) {
     }
 }
 
-// Test by calling with a bang
-function bang() {
+function randomizeAllDevices() {
     var trackNumber = getTrackNumber();
-    if (mode === MODES.SHALLOW) {
+    if (randomDeviance === 0) {
+        // do nothing if randomDeviance is 0
+    } else if (mode === MODES.SHALLOW) {
         if (trackNumber !== null) {
             var deviceIndex = 0; // go through all devices on the track
             var nextDevice = getNextDevice(trackNumber, deviceIndex);
             
             while (nextDevice !== null) {
+                post("Randomizing device at index " + deviceIndex + " on track " + trackNumber + "\n");
                 randomizeDeviceParameters(nextDevice);
                 deviceIndex++;
                 nextDevice = getNextDevice(trackNumber, deviceIndex);
@@ -190,4 +207,18 @@ function bang() {
     } else {
         walkDevices("live_set tracks " + trackNumber);
     }
+}
+
+function runscript() {
+    post("Multi-device randomizer script loaded.\n");
+    post("Mode: " + (mode === MODES.SHALLOW ? "SHALLOW" : "DEEP") + "\n");
+    post("Random Deviance: " + randomDeviance + "\n");
+    post("Freeze: " + freeze + "\n");
+    post("Excluded Macros: " + excludedMacros.join(", ") + "\n");
+}
+
+function bang() {
+    randomizeAllDevices();
+    // task = new Task(randomizeAllDevices, this);
+    // task.schedule(0); // schedule for next tick
 }
