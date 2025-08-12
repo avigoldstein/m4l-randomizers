@@ -1,5 +1,5 @@
 autowatch = 1;
-inlets = 6;
+inlets = 5;
 
 var excludedMacros = [];
 var randomDeviance = 100;
@@ -20,7 +20,7 @@ function msg_int(val) {
 
 function anything(m) {
     if (this.inlet === 4)
-        excludedMacros = m ? m.split(",").map(function(s){return s.trim();}) : [];
+        excludedMacros = m ? m.split(",").map(function(s){return s.trim().toLowerCase();}) : [];
 }
 
 function callback(args) {
@@ -75,7 +75,7 @@ function walkDevices(path) {
 function randomizeCachedParams() {
     for (var i = 0; i < paramCache.length; i++) {
         var entry = paramCache[i];
-        if (excludedMacros.indexOf(entry.name) === -1) {
+        if (excludedMacros.indexOf(entry.name.toLowerCase()) === -1) {
             var p = new LiveAPI("id " + entry.id);
             var currVal = anchor && anchorMap[entry.id] !== undefined
                 ? anchorMap[entry.id]
